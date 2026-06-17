@@ -6,7 +6,30 @@ import {
   loadSession
 } from "../services/SessionManager";
 
-const firstTabId = crypto.randomUUID();
+function getNextUntitledNumber(
+  tabs: Tab[]
+): number {
+  const numbers = tabs.map(tab => {
+    const match =
+      tab.title.match(
+        /^Untitled (\d+)$/
+      );
+
+    return match
+      ? Number(match[1])
+      : 0;
+  });
+
+  return (
+    Math.max(
+      0,
+      ...numbers
+    ) + 1
+  );
+}
+
+const firstTabId =
+  crypto.randomUUID();
 
 interface TabStore {
   tabs: Tab[];
@@ -15,9 +38,7 @@ interface TabStore {
   recentlyClosed: Tab[];
 
   addTab: () => void;
-
   closeTab: (id: string) => void;
-
   restoreLastClosedTab: () => void;
 
   updateContent: (
@@ -33,47 +54,9 @@ interface TabStore {
 }
 
 export const useTabStore =
-create<TabStore>((set, get) => ({
+create<TabStore>((set, get) => {
 
-  tabs: [
-    {
-      id: firstTabId,
-      title: "Untitled 1",
-      content: "",
-      pinned: false,
-      dirty: false
-    }
-  ],
-
-  activeTabId: firstTabId,
-
-  recentlyClosed: [],
-
-  addTab: () => {
-
-    set((state) => {
-
-      const id =
-        crypto.randomUUID();
-
-      return {
-        tabs: [
-          ...state.tabs,
-          {
-            id,
-            title:
-              `Untitled ${
-                state.tabs.length + 1
-              }`,
-            content: "",
-            pinned: false,
-            dirty: false
-          }
-        ],
-        activeTabId: id
-      };
-    });
-
+  const persist = () => {
     const current = get();
 
     saveSession({
@@ -81,153 +64,203 @@ create<TabStore>((set, get) => ({
       activeTabId:
         current.activeTabId
     });
-  },
+  };
 
-  closeTab: (id) => {
+  return {
 
-    const state = get();
+    tabs: [
+      {
+        id: firstTabId,
+        title: "Untitled 1",
+        content: "",
+        pinned: false,
+        dirty: false
+      }
+    ],
 
-    const tab =
-      state.tabs.find(
-        t => t.id === id
-      );
+    activeTabId:
+      firstTabId,
 
-    if (!tab) {
-      return;
-    }
+    recentlyClosed: [],
 
-    if (
-      tab.dirty &&
-      !window.confirm(
-        `Discard changes in ${tab.title}?`
-      )
-    ) {
-      return;
-    }
+    addTab: () => {
 
-    const remaining =
-      state.tabs.filter(
-        t => t.id !== id
-      );
+      set((state) => {
 
-    const nextActiveId =
-      remaining.length
-        ? remaining[
-            remaining.length - 1
-          ].id
-        : "";
+        const id =
+          crypto.randomUUID();
 
-    set({
-      tabs: remaining,
+        return {
+          tabs: [
+            ...state.tabs,
+            {
+              id,
+              title:
+                `Untitled ${
+                  getNextUntitledNumber(
+                    state.tabs
+                  )
+                }`,
+              content: "",
+              pinned: false,
+              dirty: false
+            }
+          ],
 
-      recentlyClosed: [
-        tab,
-        ...state.recentlyClosed
-      ],
-
-      activeTabId:
-        nextActiveId
-    });
-
-    saveSession({
-      tabs: remaining,
-      activeTabId:
-        nextActiveId
-    });
-  },
-
-  restoreLastClosedTab: () => {
-
-    const state = get();
-
-    const last =
-      state.recentlyClosed[0];
-
-    if (!last) {
-      return;
-    }
-
-    set({
-
-      tabs: [
-        ...state.tabs,
-        last
-      ],
-
-      recentlyClosed:
-        state.recentlyClosed.slice(1),
-
-      activeTabId:
-        last.id
-    });
-
-    const current = get();
-
-    saveSession({
-      tabs: current.tabs,
-      activeTabId:
-        current.activeTabId
-    });
-  },
-
-  updateContent:
-    (id, content) => {
-
-      set((state) => ({
-        tabs:
-          state.tabs.map(tab =>
-            tab.id === id
-              ? {
-                  ...tab,
-                  content,
-                  dirty: true
-                }
-              : tab
-          )
-      }));
-
-      const current =
-        get();
-
-      saveSession({
-        tabs: current.tabs,
-        activeTabId:
-          current.activeTabId
+          activeTabId: id
+        };
       });
+
+      persist();
     },
 
-  setActiveTab:
-    (id) => {
+    closeTab: (id) => {
+
+      const state = get();
+
+      const tab =
+        state.tabs.find(
+          t => t.id === id
+        );
+
+      if (!tab) {
+        return;
+      }
+
+      if (
+        tab.dirty &&
+        !window.confirm(
+          `Discard changes in ${tab.title}?`
+        )
+      ) {
+        return;
+      }
+
+      const remaining =
+        state.tabs.filter(
+          t => t.id !== id
+        );
+
+      const nextActiveId =
+        remaining.length
+          ? remaining[
+              remaining.length - 1
+            ].id
+          : "";
 
       set({
-        activeTabId: id
-      });
+        tabs: remaining,
 
-      const current =
-        get();
+        recentlyClosed: [
+          tab,
+          ...state.recentlyClosed
+        ],
 
-      saveSession({
-        tabs: current.tabs,
         activeTabId:
-          current.activeTabId
+          nextActiveId
       });
+
+      persist();
     },
 
-  initialize: async () => {
+    restoreLastClosedTab: () => {
 
-    const session =
-      await loadSession();
+      const state = get();
 
-    if (!session) {
-      return;
+      const last =
+        state.recentlyClosed[0];
+
+      if (!last) {
+        return;
+      }
+
+      const restoredTab = {
+        ...last
+      };
+
+      const titleExists =
+        state.tabs.some(
+          t =>
+            t.title ===
+            restoredTab.title
+        );
+
+      if (
+        titleExists &&
+        /^Untitled \d+$/.test(
+          restoredTab.title
+        )
+      ) {
+
+        restoredTab.title =
+          `Untitled ${
+            getNextUntitledNumber(
+              state.tabs
+            )
+          }`;
+      }
+
+      set({
+        tabs: [
+          ...state.tabs,
+          restoredTab
+        ],
+
+        recentlyClosed:
+          state.recentlyClosed.slice(1),
+
+        activeTabId:
+          restoredTab.id
+      });
+
+      persist();
+    },
+
+    updateContent:
+      (id, content) => {
+
+        set((state) => ({
+          tabs:
+            state.tabs.map(tab =>
+              tab.id === id
+                ? {
+                    ...tab,
+                    content,
+                    dirty: true
+                  }
+                : tab
+            )
+        }));
+
+        persist();
+      },
+
+    setActiveTab:
+      (id) => {
+
+        set({
+          activeTabId: id
+        });
+
+        persist();
+      },
+
+    initialize: async () => {
+
+      const session =
+        await loadSession();
+
+      if (!session) {
+        return;
+      }
+
+      set({
+        tabs:
+          session.tabs,
+
+        activeTabId:
+          session.activeTabId
+      });
     }
-
-    set({
-      tabs:
-        session.tabs,
-      activeTabId:
-        session.activeTabId
-    });
-  }
-
-}));
+  };
+});

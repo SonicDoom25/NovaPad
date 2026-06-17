@@ -22,48 +22,61 @@ function App() {
 
   useEffect(() => {
 
-    const handleKey =
-      (e: KeyboardEvent) => {
+    const handleKey = (
+      e: KeyboardEvent
+    ) => {
 
-        if (
-          e.ctrlKey &&
-          e.shiftKey &&
-          e.key === "T"
-        ) {
-          e.preventDefault();
+      if (
+        e.ctrlKey &&
+        e.shiftKey &&
+        e.code === "KeyT"
+      ) {
 
-          restoreLastClosedTab();
-        }
-      };
+        console.log(
+          "CTRL SHIFT T DETECTED"
+        );
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        restoreLastClosedTab();
+      }
+    };
 
     window.addEventListener(
       "keydown",
-      handleKey
+      handleKey,
+      true
     );
 
     return () =>
       window.removeEventListener(
         "keydown",
-        handleKey
+        handleKey,
+        true
       );
 
   }, [restoreLastClosedTab]);
 
   const activeTab =
     tabs.find(
-      (tab) =>
+      tab =>
         tab.id === activeTabId
     );
 
   if (!activeTab) {
+
     return (
       <div
         style={{
           height: "100vh",
           display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          flexDirection: "column"
+          justifyContent:
+            "center",
+          alignItems:
+            "center",
+          flexDirection:
+            "column"
         }}
       >
         <h2>
@@ -84,7 +97,8 @@ function App() {
       style={{
         height: "100vh",
         display: "flex",
-        flexDirection: "column"
+        flexDirection:
+          "column"
       }}
     >
       <TabBar />
@@ -98,7 +112,9 @@ function App() {
           content={
             activeTab.content
           }
-          onChange={(value) =>
+          onChange={(
+            value
+          ) =>
             updateContent(
               activeTab.id,
               value
